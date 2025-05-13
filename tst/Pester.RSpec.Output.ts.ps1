@@ -212,6 +212,32 @@ i -PassThru:$PassThru {
             $d1Running = $output | Select-String -Pattern '^Running tests from.*\<ScriptBlock\>.*$'
             @($d1Running).Count | Verify-Equal 1
         }
+
+        t 'Script Block container names are output when BeforeAll fails' {
+            $sb = {
+                $PesterPreference = [PesterConfiguration]::Default
+                $PesterPreference.Output.Verbosity = 'Detailed'
+                $PesterPreference.Output.RenderMode = 'ConsoleColor'
+
+                $container = New-PesterContainer -ScriptBlock {
+                    BeforeAll {
+                        throw 'bad error'
+                    }
+                    Describe 'd1' {
+                        It 'i1' {
+                            1 | Should -Be 1
+                        }
+                    }
+                }
+                Invoke-Pester -Container $container
+            }
+
+            $output = Invoke-InNewProcess $sb
+            $null, $run = $output -join "`n" -split 'Running tests.'
+            $run | Write-Host
+
+            $run | Verify-Like '*[-]*<ScriptBlock>* failed with:*'
+        }
     }
 
     b 'Output for data-driven blocks' {
@@ -250,8 +276,8 @@ i -PassThru:$PassThru {
         }
     }
 
-    b 'Output for container names' {
-        t 'Script Block container names are output when BeforeAll fails' {
+    b 'Output for failed tests' {
+        t 'It names are output when container BeforeAll fails' {
             $sb = {
                 $PesterPreference = [PesterConfiguration]::Default
                 $PesterPreference.Output.Verbosity = 'Detailed'
@@ -265,6 +291,9 @@ i -PassThru:$PassThru {
                         It 'i1' {
                             1 | Should -Be 1
                         }
+                        It 'i2' {
+                            1 | Should -Be 1
+                        }
                     }
                 }
                 Invoke-Pester -Container $container
@@ -274,7 +303,84 @@ i -PassThru:$PassThru {
             $null, $run = $output -join "`n" -split 'Running tests.'
             $run | Write-Host
 
-            $run | Verify-Like '*[-]*<ScriptBlock>* failed with:*'
+            $run | Verify-Like '*[-]*i1*'
+            $run | Verify-Like '*[-]*i2*'
+        }
+
+        t 'It names are output when describe BeforeAll fails' {
+            $sb = {
+                $PesterPreference = [PesterConfiguration]::Default
+                $PesterPreference.Output.Verbosity = 'Detailed'
+                $PesterPreference.Output.RenderMode = 'ConsoleColor'
+
+                $container = New-PesterContainer -ScriptBlock {
+                    Describe 'd1' {
+                        BeforeAll {
+                            throw 'bad error'
+                        }
+                        It 'i1' {
+                            1 | Should -Be 1
+                        }
+                        It 'i2' {
+                            1 | Should -Be 1
+                        }
+                    }
+                }
+                Invoke-Pester -Container $container
+            }
+
+            $output = Invoke-InNewProcess $sb
+            $null, $run = $output -join "`n" -split 'Running tests.'
+            $run | Write-Host
+
+            $run | Verify-Like '*[-]*i1*'
+            $run | Verify-Like '*[-]*i2*'
+        }
+
+        t 'It names are output when nested describe BeforeAll fails' {
+            $sb = {
+                $PesterPreference = [PesterConfiguration]::Default
+                $PesterPreference.Output.Verbosity = 'Detailed'
+                $PesterPreference.Output.RenderMode = 'ConsoleColor'
+
+                $container = New-PesterContainer -ScriptBlock {
+                    BeforeAll {
+                        throw 'bad error'
+                    }
+                    Describe 'd1' {
+                        It 'i1' {
+                            1 | Should -Be 1
+                        }
+                        It 'i2' {
+                            1 | Should -Be 1
+                        }
+                        Describe 'd2' {
+                            It 'i3' {
+                                1 | Should -Be 1
+                            }
+                            It 'i4' {
+                                1 | Should -Be 1
+                            }
+                        }
+                    }
+                    Describe 'd3' {
+                        It 'i5' {
+                            1 | Should -Be 1
+                        }
+                        It 'i6' {
+                            1 | Should -Be 1
+                        }
+                    }
+                }
+                Invoke-Pester -Container $container
+            }
+
+            $output = Invoke-InNewProcess $sb
+            $null, $run = $output -join "`n" -split 'Running tests.'
+            $run | Write-Host
+
+            $run | Verify-Like '*[-]*i3*'
+            $run | Verify-Like '*[-]*i4*'
         }
     }
 
